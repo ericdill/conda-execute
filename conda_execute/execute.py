@@ -24,11 +24,28 @@ from conda_execute.tmpenv import (cleanup_tmp_envs, register_env_usage,
 log = logging.getLogger('conda-execute')
 log.addHandler(logging.NullHandler())
 
+DEBUG = False
 
 def extract_spec(fh):
+    """Turn the conda-execute header into a dictionary
+
+    Parameters
+    ----------
+    fh : string
+        Filename where code that should be executed exists
+
+    Returns
+    -------
+    dict
+        The spec in dictionary format. Keys are `run_with` and `env`.
+        `run_with` is the command to run the file with
+        `env` is a list of the libraries
+    """
     spec = []
     in_spec = False
     shebang = []
+    if DEBUG:
+        pdb.set_trace()
 
     for i, line in enumerate(fh):
         if i == 0:
@@ -55,7 +72,6 @@ def extract_spec(fh):
 
     if platform.system() != 'Windows':
         spec.setdefault('run_with', ['/bin/sh', '-c'])
-
     return spec
 
 
@@ -70,8 +86,27 @@ def read_shebang(line):
 
     return shebang
 
+import pdb
 
 def execute(path, force_env=False, arguments=()):
+    """Main execution function for conda-execute
+
+    Parameters
+    ----------
+    path : str
+        The path to the file containing the python code to execute
+    force_env : bool, optional
+        Defaults to False
+    arguments : iterable, optional
+        All remaining positional arguments after the first positional argument
+        in the command line invocation of conda-execute
+        Defaults to empty tuple.
+
+    Returns
+    -------
+    int
+        Exit code from conda-execute. See `execute_within_env`
+    """
     with open(path, 'r') as fh:
         spec = extract_spec(fh)
 
@@ -83,11 +118,17 @@ def execute(path, force_env=False, arguments=()):
 
     env_prefix = create_env(env_spec, force_env, spec.get('channels', []))
     log.info('Prefix: {}'.format(env_prefix))
-
+    log.info('spec = %s' % spec)
     return execute_within_env(env_prefix, spec['run_with'] + [path] + list(arguments))
 
 
 def execute_within_env(env_prefix, cmd):
+    """
+
+    Returns
+    -------
+    int
+    """
     register_env_usage(env_prefix)
 
     if platform.system() == 'Windows':
@@ -172,7 +213,7 @@ def main():
             path = os.path.abspath(args.path)
         else:
             raise ValueError('Either pass the filename to execute, or pipe with -c.')
-
+        log.debug('Executing code located at %s' % path)
         exit_actions.append(cleanup_tmp_envs)
         exit(execute(path, force_env=args.force_env, arguments=args.remaining_args))
     finally:
